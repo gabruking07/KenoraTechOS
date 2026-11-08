@@ -1,4 +1,6 @@
-const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
+// In production, route API requests through Vercel so the browser uses a
+// same-origin session cookie. Local development talks directly to the API.
+const base = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api/v1' : 'http://localhost:4000/api/v1');
 export type PageResult<T> = { data: T[]; meta: { page: number; limit: number; total: number; pages: number } };
 async function responseBody(path: string, options: RequestInit = {}) {
   const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
