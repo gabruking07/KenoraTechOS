@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import mongoose from 'mongoose';
-import { User } from '../models/index.js';
+import { User, UserInvitation } from '../models/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTrustedOrigin } from '../middleware/csrf.js';
 import { recordSecurityEvent } from '../services/securityAudit.js';
@@ -20,6 +20,16 @@ const regenerateSession=(req:any)=>new Promise<void>((resolve,reject)=>req.sessi
 async function revokeUserSessions(userId:string,except?:string){const result=await sessionCollection().deleteMany({'session.userId':userId,...(except?{_id:{$ne:except}}:{})} as any);return result.deletedCount||0}
 async function verifiedMfaCode(user:any,code:string){if(user.mfaSecret&&verifyTotp(decryptMfaSecret(user.mfaSecret),code))return {ok:true,recovery:false};const normalized=code.trim().toUpperCase(),index=(user.recoveryCodeHashes||[]).findIndex((saved:string)=>safeEqualHash(normalized,saved));if(index>=0){user.recoveryCodeHashes.splice(index,1);return {ok:true,recovery:true}}return {ok:false,recovery:false}}
 async function finishLogin(req:any,user:any){await regenerateSession(req);req.session.userId=String(user._id);await new Promise<void>((resolve,reject)=>req.session.save((error:any)=>error?reject(error):resolve()));user.lastLogin=new Date();user.mfaFailedAttempts=0;user.mfaLockedUntil=undefined;await user.save();}
+
+router.post('/invitations/accept',requireTrustedOrigin,wrap(async(req,res)=>{
+  const input=z.object({token:z.string().min(32).max(128),name:z.string().trim().min(1).max(100),password:z.string().min(1).max(200)}).safeParse(req.body);
+  if(!input.success||!passwordIsStrong(input.data.password))return res.status(400).json({error:{message:'Invitation is invalid or password does not meet the strength requirements.'}});
+  const tokenHash=createHash('sha256').update(input.data.token).digest('hex'),invitation=await UserInvitation.findOne({tokenHash,usedAt:null,expiresAt:{$gt:new Date()}});
+  if(!invitation)return res.status(400).json({error:{message:'Invitation is invalid or expired.'}});
+  if(await User.exists({email:invitation.email}))return res.status(409).json({error:{message:'An account already exists for this invitation.'}});
+  const user=await User.create({email:invitation.email,name:input.data.name,passwordHash:await bcrypt.hash(input.data.password,12),role:'member'});
+  invitation.usedAt=new Date();await invitation.save();await finishLogin(req,user);await recordSecurityEvent(req,'auth.invitation.accept','success',{actorId:user._id,targetType:'User',targetId:user._id});res.status(201).json({data:{email:user.email,name:user.name,mfaRequired:false}});
+}));
 
 router.post('/login',wrap(async(req,res)=>{
   const parsed=z.object({email:z.string().email().max(254),password:z.string().min(1).max(200)}).safeParse(req.body);
@@ -42,7 +52,7 @@ router.post('/mfa/verify',requireTrustedOrigin,wrap(async(req,res)=>{
 }));
 
 router.post('/logout',requireTrustedOrigin,wrap(async(req,res)=>{const userId=req.session.userId;const mfaUserId=req.session.mfaUserId;if(userId||mfaUserId)await recordSecurityEvent(req,'auth.logout','success',{actorId:userId||mfaUserId});await destroySession(req);res.clearCookie('kenora.sid',{path:'/',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});res.json({data:{success:true}})}));
-router.get('/me',requireAuth,wrap(async(_req,res)=>{const u=res.locals.user;res.json({data:{email:u.email,name:u.name,mfaEnabled:Boolean(u.mfaEnabled),lastLogin:u.lastLogin||null}})}));
+router.get('/me',requireAuth,wrap(async(_req,res)=>{const u=res.locals.user;res.json({data:{email:u.email,name:u.name,role:u.role,mfaEnabled:Boolean(u.mfaEnabled),lastLogin:u.lastLogin||null}})}));
 
 router.post('/password/change',requireAuth,requireTrustedOrigin,wrap(async(req,res)=>{
   const input=z.object({currentPassword:z.string().min(1).max(200),newPassword:z.string().min(1).max(200)}).parse(req.body),user=await User.findById(res.locals.user._id);

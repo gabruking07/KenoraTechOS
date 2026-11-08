@@ -4,5 +4,6 @@ dist/
 .env.*
 !.env.example
 guide.txt
+/scripts/
 server/uploads/*
 !server/uploads/.gitkeep

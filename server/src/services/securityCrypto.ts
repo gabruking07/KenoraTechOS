@@ -6,6 +6,13 @@ function mfaKey() {
   if (!/^[a-f\d]{64}$/i.test(value)) throw new Error('MFA_ENCRYPTION_KEY must be a persistent 32-byte hex key before MFA can be enabled.');
   return Buffer.from(value, 'hex');
 }
+function providerKey() {
+  const value = process.env.PROVIDER_CREDENTIALS_ENCRYPTION_KEY || '';
+  if (!/^[a-f\d]{64}$/i.test(value)) throw new Error('PROVIDER_CREDENTIALS_ENCRYPTION_KEY must be a persistent 32-byte hex key.');
+  return Buffer.from(value, 'hex');
+}
+export function encryptProviderToken(token:string) { const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',providerKey(),iv),encrypted=Buffer.concat([cipher.update(token,'utf8'),cipher.final()]);return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`; }
+export function decryptProviderToken(value:string) { const [version,iv,tag,encrypted]=value.split('.');if(version!=='v1'||!iv||!tag||!encrypted)throw new Error('Stored provider credential is invalid.');const decipher=createDecipheriv('aes-256-gcm',providerKey(),Buffer.from(iv,'base64url'));decipher.setAuthTag(Buffer.from(tag,'base64url'));return Buffer.concat([decipher.update(Buffer.from(encrypted,'base64url')),decipher.final()]).toString('utf8'); }
 export function encryptMfaSecret(secret: string) {
   const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', mfaKey(), iv), encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
