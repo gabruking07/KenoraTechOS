@@ -1,0 +1,19 @@
+import { useState } from 'react';
+import { Archive, Bell, CheckCheck, RefreshCw } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, apiPage } from '../../services/api';
+import Pager from './Pager';
+
+type Notice={_id:string;kind:string;category?:string;priority?:string;title:string;message:string;relatedType?:string;relatedId?:string;dueAt?:string;readAt?:string;createdAt:string;deliveryStatus?:string};
+const entityPath:Record<string,string>={Project:'/projects',Task:'/tasks',Milestone:'/milestones',Document:'/documentation',Client:'/clients',Lead:'/leads',Proposal:'/proposals',Invoice:'/invoices',Infrastructure:'/infrastructure',Deployment:'/deployments',Transaction:'/finance'};
+export default function NotificationsPage({onNavigate}:{onNavigate:(path:string)=>void}){
+  const [page,setPage]=useState(1),[unread,setUnread]=useState(false);const qc=useQueryClient();const q=useQuery({queryKey:['notifications',page,unread],queryFn:()=>apiPage<Notice>(`/business/notifications?page=${page}&limit=25${unread?'&unread=true':''}`)});
+  const refresh=()=>{void qc.invalidateQueries({queryKey:['notifications']})};
+  const read=useMutation({mutationFn:(id:string)=>api(`/business/notifications/${id}/read`,{method:'PATCH'}),onSuccess:refresh});
+  const readAll=useMutation({mutationFn:()=>api('/business/notifications/read-all',{method:'POST'}),onSuccess:refresh});
+  const archive=useMutation({mutationFn:(ids:string[])=>api('/business/notifications/archive',{method:'POST',body:JSON.stringify({ids})}),onSuccess:refresh});
+  return <section className="feature-page"><div className="page-heading"><div><div className="eyebrow">OPERATIONS / INBOX</div><h1>Notifications</h1><p>In-app reminders and operational updates. Email delivery is shown only when configured.</p></div><div className="page-actions"><button className="secondary-btn" onClick={()=>setUnread(!unread)}>{unread?'Show all':'Unread only'}</button><button className="secondary-btn" onClick={()=>readAll.mutate()} disabled={readAll.isPending}><CheckCheck size={14}/>Mark all read</button></div></div>
+    {q.isError?<div className="error-state">{q.error.message}</div>:q.isLoading?<div className="loading-state"><RefreshCw className="spin"/>Loading notifications…</div>:<><div className="panel folder-list">{q.data?.data.length?q.data.data.map(item=><article className={`notification-row ${item.readAt?'is-read':''}`} key={item._id}><span className="notification-icon"><Bell size={15}/></span><button className="notification-content" onClick={()=>{if(!item.readAt)read.mutate(item._id);const path=item.relatedType?entityPath[item.relatedType]:undefined;if(path)onNavigate(path)}}><b>{item.title}</b><small>{item.message}</small><small>{item.category||item.kind} · {item.priority||'normal'} · {new Date(item.createdAt).toLocaleString()}{item.dueAt?` · Due ${new Date(item.dueAt).toLocaleDateString()}`:''} · {item.deliveryStatus==='sent'?'Email sent':item.deliveryStatus==='failed'?'Email failed':item.deliveryStatus==='not-configured'?'Email not configured':'In app'}</small></button><div className="notification-actions">{!item.readAt&&<button className="secondary-btn" onClick={()=>read.mutate(item._id)} aria-label={`Mark ${item.title} read`}>Read</button>}<button className="icon-button" onClick={()=>archive.mutate([item._id])} aria-label={`Archive ${item.title}`} title="Archive"><Archive size={14}/></button></div></article>):<div className="empty-inline">{unread?'No unread notifications.':'No notifications have been recorded.'}</div>}</div><Pager page={q.data?.meta.page||page} pages={q.data?.meta.pages||1} total={q.data?.meta.total||0} onChange={setPage}/></>}
+    {(read.isError||readAll.isError||archive.isError)&&<div className="error-banner">{read.error?.message||readAll.error?.message||archive.error?.message}</div>}
+  </section>;
+}

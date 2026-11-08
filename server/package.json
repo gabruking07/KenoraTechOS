@@ -1,0 +1,49 @@
+{
+  "name": "@kenoratech/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "worker": "node dist/server/src/worker.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "migrate:documents": "tsx src/services/migrateDocuments.ts",
+    "migrate:business": "tsx ../scripts/migrate-business-records.ts",
+    "seed:projects": "tsx ../scripts/seed-projects.ts",
+    "seed:admin": "tsx ../scripts/seed-admin.ts"
+  },
+  "dependencies": {
+    "@types/express": "5.0.3",
+    "@types/express-session": "1.18.2",
+    "@types/morgan": "1.9.10",
+    "@types/node": "24.8.1",
+    "@types/nodemailer": "^8.0.2",
+    "bcrypt": "6.0.0",
+    "connect-mongo": "5.1.0",
+    "cors": "2.8.5",
+    "dotenv": "17.2.3",
+    "express": "5.1.0",
+    "express-rate-limit": "8.1.0",
+    "express-session": "1.18.2",
+    "helmet": "8.1.0",
+    "mongoose": "8.19.1",
+    "morgan": "1.10.1",
+    "multer": "2.0.2",
+    "nodemailer": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "5.0.2",
+    "@types/cors": "2.8.19",
+    "@types/multer": "2.0.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/supertest": "6.0.3",
+    "supertest": "7.1.4",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

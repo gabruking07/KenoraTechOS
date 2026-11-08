@@ -1,0 +1,3 @@
+import type { NextFunction, Request, Response } from 'express';
+import { recordSecurityEvent } from '../services/securityAudit.js';
+export function requireTrustedOrigin(req:Request,res:Response,next:NextFunction){const allowed=[process.env.CLIENT_URL||'http://localhost:5173',...(process.env.CORS_ALLOWED_ORIGINS||'').split(',')].map(value=>value.trim());let origin=req.get('origin')||'';if(!origin){try{origin=req.get('referer')?new URL(req.get('referer')!).origin:''}catch{origin=''}}if(origin&&allowed.includes(origin))return next();recordSecurityEvent(req,'csrf.origin.denied','denied',{actorId:(res.locals.user as any)?._id,metadata:{path:req.path,method:req.method}}).catch(()=>{});return res.status(403).json({error:{message:'Request origin could not be verified'}})}

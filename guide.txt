@@ -1,0 +1,313 @@
+﻿KENORATECHOS — COMPLETE USER AND OPERATIONS GUIDE
+Last updated: 8 November 2026
+
+======================================================================
+1. WHAT THIS WEBSITE IS
+======================================================================
+
+KenoraTechOS is a self-hosted workspace for managing KenoraTech projects and operations. It combines:
+- Internal project records (the projects you create in All Projects).
+- Work tracking (tasks, Kanban, milestones and roadmap).
+- Business records (clients, leads, services, proposals, invoices and finance).
+- Operational records (security, infrastructure, testing, technical debt, notifications and automations).
+- Provider-native management for GitHub repositories, Vercel projects/deployments and Render services/deployments.
+
+Provider resources are discovered directly from the configured provider accounts. They do not need to be created or linked as internal KenoraTechOS projects. Internal project records remain available for planning, business, tasks and legacy project-specific workflows.
+
+This application does not copy source code from your PC into a provider. Git pushes are still made with your normal Git client/terminal. If GitHub is connected to Vercel or Render with auto-deploy enabled, the provider can deploy after a push. KenoraTechOS discovers provider resources, displays activity and deployment history, and can request supported Vercel/Render deployments directly from their resource pages.
+
+======================================================================
+2. THE MAIN PARTS AND HOW DATA FLOWS
+======================================================================
+
+Browser (client/)
+- React and TypeScript render the workspace, navigation, forms and tables.
+- The browser calls the API at VITE_API_BASE_URL. During local development the default is http://localhost:4000/api/v1.
+- Login uses a secure session cookie; browser requests include credentials.
+- The browser never needs GitHub, Vercel, Render or Cloudflare provider secrets. Never put provider secrets in VITE_* variables or frontend source code.
+
+API (server/)
+- Express routes live under server/src/routes and are mounted under /api/v1.
+- The API authenticates the session and checks admin/permission requirements before protected operations.
+- Provider API calls run server-side in server/src/services/providerManagement.ts and use bounded HTTP helpers in providerHttp.ts. Legacy project-matched activity is kept in providerActivity.ts.
+- Provider secrets are read from the API process environment, usually server/.env for local development. In hosted environments, use the host's secret/environment-variable manager.
+
+Database
+- MongoDB stores internal users, projects and workspace/business records.
+- Provider resources and sync history are cached in MongoDB by provider/account/type/external ID. Provider APIs remain the source of truth; sync updates the cache and does not create internal project records.
+- The main internal project model stores optional repository links, live URLs/domains, Vercel project name/ID and Render service ID.
+
+Provider flow
+1. The API reads the provider credential from its own environment.
+2. A provider connection check validates the credential with that provider.
+3. Discovery endpoints list provider-owned resources the credential can access.
+4. Scheduled and manual synchronization discovers repositories, projects, services, and recent deployments into the provider cache. Each provider sync can succeed or fail independently.
+5. Provider pages read the cached resource list, show health/timestamps and load supported details from the provider. A confirmed deploy action calls the provider API directly.
+6. Existing internal projects and their optional provider links remain usable by legacy features.
+
+======================================================================
+3. RUNNING THE WEBSITE LOCALLY
+======================================================================
+
+Prerequisites
+- Install a supported Node.js release and npm.
+- Have access to a MongoDB database and network access to it.
+- Keep this repository on your PC. Commands below are run from the repository root unless a directory is stated.
+
+Backend setup
+1. Open a terminal in the repository root.
+2. Change to server: cd server
+3. Install packages: npm install
+4. Copy server/.env.example to server/.env if the environment file does not exist.
+5. Edit server/.env locally. Set at least MONGODB_URI and a SESSION_SECRET of at least 32 characters. Configure the other required app settings from the example file as needed.
+6. Start the API: npm run dev
+7. A successful startup reports that the database connected and the API is listening (the default port is 4000).
+8. Keep this terminal running. Stop the server with Ctrl+C when you are finished.
+
+Frontend setup
+1. Open a second terminal at the repository root.
+2. Change to client: cd client
+3. Install packages: npm install
+4. Check client/.env.example and set VITE_API_BASE_URL only if the API is not at the default http://localhost:4000/api/v1.
+5. Start the frontend with the script defined in client/package.json, normally npm run dev.
+6. Open the local address printed by the frontend dev server.
+7. Sign in using the administrator account provisioned for this database. If no account exists, follow the project's seed/admin instructions in its scripts and package files.
+
+Do not share .env contents in screenshots, chat, source control, issue reports or logs. If a secret is exposed, revoke/rotate it at its provider, update the local/hosted environment, and restart/redeploy the API.
+
+======================================================================
+4. ACCOUNT, NAVIGATION AND BASIC USE
+======================================================================
+
+- Sign in to open the workspace. Sign out from the profile control in the lower sidebar.
+- The left navigation is grouped by workspace, development, operations, business, intelligence and system functions.
+- Use the sidebar collapse control to make more room. On a small screen, use the menu button to open/close navigation.
+- The theme control toggles light/dark appearance. Notifications opens the notification area.
+- The top search and help controls are intentionally removed from the header. The Documentation page remains available from the left navigation.
+- A page breadcrumb identifies the current workspace page.
+- Most lists show saved database records. A provider discovery list shows remote account resources and is labeled as such.
+
+======================================================================
+5. INTERNAL PROJECTS — CREATE AND LINK THEM
+======================================================================
+
+Create an internal project
+1. Open All Projects.
+2. Choose the create-project action.
+3. Enter a project name; add a description and other known project details.
+4. Save. The API creates the internal project record in MongoDB.
+5. Open the project to see its overview and tabs.
+
+Provider resources are discovered without linking them. Use the GitHub, Vercel, Render and Deployments pages for provider resources. Project Settings still supports optional legacy links for internal project-specific workflows; these links are not required for discovery or provider-page actions.
+
+======================================================================
+6. GITHUB: CONNECT, DISCOVER, PUSH AND VIEW ACTIVITY
+======================================================================
+
+Credential expected by the current provider adapter
+- GITHUB_TOKEN is the credential used for API reads.
+- GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are OAuth application credentials; the current adapter does not use those values to list repositories or perform OAuth sign-in.
+- Use a fine-grained personal access token restricted to the needed repositories. Grant the read permissions needed for repository metadata/content, issues and pull requests according to the endpoints enabled by the adapter. Store it only in server/.env or the API host's secret manager.
+
+Connect locally
+1. Create/copy the token in GitHub and keep it private.
+2. In server/.env set GITHUB_TOKEN=your_token (do not include extra spaces; quote only if needed by dotenv).
+3. Restart the backend process so dotenv reads the changed file.
+4. Open the GitHub page. It shows connection status and repositories accessible to this token.
+5. Use Sync now to fetch the latest list. The page refreshes periodically too.
+6. Select a repository in the list to view its metadata, branches, commits, issues and pull requests from GitHub. No internal project link is needed.
+
+Push source from your PC
+1. Open a terminal in the local source repository, not merely the KenoraTechOS web page.
+2. Check git status and confirm the intended files are staged/committed.
+3. Add the GitHub remote if necessary, using the repository URL from GitHub.
+4. Commit the changes and push the intended branch, for example git push origin main (replace main with your actual branch).
+5. Refresh the GitHub discovery/activity list. A push does not originate from KenoraTechOS; it is done by your Git client/terminal.
+6. If Vercel/Render is connected to that repository and auto-deploy is enabled, the host may start a deployment after the push.
+
+The KenoraTechOS provider integration is read-only for GitHub. It does not create repositories, upload PC files, commit, push, merge pull requests or modify GitHub settings.
+
+======================================================================
+7. VERCEL: CONNECT, DISCOVER AND DEPLOY
+======================================================================
+
+1. Create an access token in Vercel account settings. Use a token with access to the intended personal account/team and projects.
+2. Put it in the backend environment as VERCEL_ACCESS_TOKEN.
+3. If the project belongs to a Vercel team, also set VERCEL_TEAM_ID to the correct team ID.
+4. Restart the local API or redeploy the hosted API after updating secrets.
+5. Open the Vercel page in KenoraTechOS and confirm the provider connection state.
+6. The discovered list contains Vercel projects visible to the token. Open takes you to the project when a direct URL is available; otherwise use Vercel dashboard.
+7. Select a project to open its Vercel page. Use Deploy on its row to request a redeploy; confirm the browser prompt. The response reports the provider-accepted state, and later syncs show the actual deployment progress/result.
+8. Use Deployments to browse all Vercel and Render deployments together.
+
+A Vercel redeploy is not the same as uploading source files from your PC. To publish new PC changes, push the connected Git branch or use Vercel's normal source deployment workflow. The in-app action redeploys what Vercel already has for that project.
+
+======================================================================
+8. RENDER: CONNECT, DISCOVER AND DEPLOY
+======================================================================
+
+1. Create an API key in Render account settings with access to the intended workspace/services.
+2. Put it in the backend environment as RENDER_API_KEY.
+3. Restart the local API or redeploy the hosted API after updating secrets.
+4. Open the Render page in KenoraTechOS. It lists services the API key can access.
+5. Select a service to inspect it. Use Deploy on its row and confirm to request a build and deploy of Render's configured source. It does not transfer local files from your PC.
+6. Use Sync now to refresh the service and deployment history.
+
+Render can also auto-deploy on Git pushes when enabled in Render settings and the service is connected to the correct repository/branch.
+
+======================================================================
+9. DEPLOYMENTS PAGE AND ACTIVITY LOGS
+======================================================================
+
+- GitHub page: discover repositories and inspect connected status.
+- Vercel page: discover Vercel projects.
+- Render page: discover Render services.
+- Deployments page: combined Vercel/Render deployment history with provider/status details and resource search.
+- Provider project/service rows: explicit deployment buttons independent of internal project records.
+- Activity Logs: internal audit entries plus legacy provider activity matched to linked internal projects. Provider deployment activity is in the provider pages and Deployments center.
+- Sync now updates provider cache. The backend also syncs at startup and every PROVIDER_SYNC_INTERVAL_MS (default 15 minutes; minimum 5 minutes).
+- Connected means the latest provider sync succeeded; Configured means a credential is present. A present but invalid/under-scoped token can be configured but fail connection.
+- Provider APIs can paginate, rate-limit, omit old activity, or restrict fields based on account plans and permissions. Treat the page as a recent operational view, not a complete archival history.
+
+======================================================================
+10. OTHER WORKSPACE AREAS
+======================================================================
+
+Dashboard
+- The provider operations section shows repository/project/service counts, deployment totals/status, recent deployments and sync health from cached provider data. The portfolio section below continues to summarize internal projects.
+
+Tasks and Kanban
+- Tasks are internal work records. Use Tasks for a list and Kanban for status columns. Link tasks to an internal project when applicable.
+
+Milestones and Roadmap
+- Milestones track checkpoints/dates against internal projects. Roadmap presents planning information.
+
+Folders, categories and technologies
+- Folders organize internal workspace records. Categories and Technologies are reusable catalog values.
+
+Documentation
+- Stores/browses workspace documentation according to its page flow. This guide file is local repository documentation unless uploaded/added through that feature.
+
+Business
+- Clients, leads, services, proposals, invoices and finance are internal business records. They are persisted by the API/database and are distinct from provider account data.
+
+Security, testing, technical debt and infrastructure
+- These pages manage internal operational assessments/records. They do not automatically scan a remote provider unless an explicit integration is implemented and configured.
+
+Notifications and automations
+- Notifications are in-app records. Automations run only when configured in the app and its worker is operating. Check the worker status/operational indicators when expecting scheduled work.
+
+Import & Export
+- The KenoraTech metadata export downloads supported internal records as JSON. It does not download source code from GitHub, Vercel or Render and does not include provider secrets.
+- Import previews an export and imports supported records; inspect the preview/result carefully.
+
+Backups
+- Backups concern application/database data and configured document storage, not a GitHub source checkout or provider deployment artifact.
+
+======================================================================
+11. ENVIRONMENT VARIABLES AND SECRET HANDLING
+======================================================================
+
+The definitive sample names are in server/.env.example. Common provider settings:
+- GITHUB_TOKEN — GitHub API read token.
+- VERCEL_ACCESS_TOKEN — Vercel API token.
+- VERCEL_TEAM_ID — optional/needed for team-owned Vercel resources.
+- RENDER_API_KEY — Render API key.
+- PROVIDER_SYNC_INTERVAL_MS — optional sync interval in milliseconds (default 900000; minimum 300000).
+- CLOUDFLARE_API_TOKEN — Cloudflare token for configured read operations.
+
+Rules:
+- Never paste token/secret values into chat, tickets, screenshots, guide.txt or commits.
+- Do not commit server/.env. Keep real secrets in local ignored env files or the deployment platform's secret manager.
+- The browser should receive configuration status only, never token values.
+- A token must have least privilege for its task. Separate read-only integration tokens from deployment-capable tokens when possible.
+- Rotate a credential immediately if it has been exposed. Update the server environment and restart/redeploy the API.
+- Environment changes are not reliably picked up by a running process; restart it.
+
+======================================================================
+12. TROUBLESHOOTING CHECKLIST
+======================================================================
+
+Page says Not configured
+- Check the exact variable name expected by the page/service.
+- Ensure it is in server/.env, not client/.env.
+- Restart npm run dev in the server directory.
+- Verify the backend actually loaded the intended .env; do not print secret values to diagnose it.
+
+Configured but connection failed
+- Use the provider status error shown on Activity Logs/discovery page.
+- Check token validity, expiry, account/team ownership, repository/service access and required read/deploy permissions.
+- Check network access, provider service status and API rate limits.
+- For team resources, configure VERCEL_TEAM_ID as applicable.
+
+Provider is connected but list is empty
+- Confirm you authenticated the correct provider account/workspace.
+- Confirm the token can access the repository/project/service. Organization policies may require approval.
+- Use Sync now after confirming changes.
+- GitHub OAuth client ID/secret by themselves do not satisfy the current GITHUB_TOKEN-based adapter.
+
+Activity does not appear
+- Open the provider page and select Sync now; check its last sync status and error.
+- Confirm a recent event exists and falls within provider API retention/limits.
+- Refresh the provider page or unified Deployments center.
+- Legacy activity inside internal project tabs still depends on optional project links.
+
+Deploy button is disabled
+- Select a discovered Vercel project or Render service; no internal project link is needed.
+- Check the respective token is configured and has deploy permissions.
+- Confirm the provider account can see the target service/project.
+
+Deployment request fails
+- Read the sanitized error displayed in the UI.
+- Confirm you accepted the deployment confirmation prompt.
+- Check provider API key permissions/account/team and provider-side service health.
+- For Vercel, a project needs an existing deployment for the redeploy action.
+- For Render, the latest-commit deploy requires a deployable service and its configured source/build settings.
+- Verify the request in the provider dashboard; an accepted/queued request is not the same as a completed successful deployment.
+
+Local API fails to start
+- Check that MONGODB_URI is configured and reachable.
+- Check SESSION_SECRET meets the app's minimum length.
+- Check for port conflicts and package install errors.
+- Read server logs but redact credential values before sharing them.
+
+Login/session problems
+- Check API is running and frontend points to the right API base URL.
+- Use the administrator account provisioned in the database.
+- Check browser cookie settings and allowed frontend origins in the API configuration.
+- Sign out and sign in again after local configuration changes if a session is stale.
+
+======================================================================
+13. WHAT THIS WEBSITE DOES NOT AUTOMATICALLY DO
+======================================================================
+
+- It does not pull a repository's full source tree onto the PC.
+- It does not push local source files to GitHub.
+- It does not create internal KenoraTechOS project records from discovered provider resources.
+- It creates exact repository associations when provider metadata contains the same owner/repository; similar names alone are never treated as a match.
+- It does not promise a complete historical feed for every provider.
+- It does not make GitHub write operations.
+- A Vercel in-app redeploy repeats the latest existing deployment; it is not a new local-source upload.
+- A Render in-app deploy asks Render to deploy its configured latest source; it is not a local-file upload.
+- Provider credentials are not entered into the web UI; they are server-side environment secrets.
+
+======================================================================
+14. QUICK FIRST-TIME CHECKLIST
+======================================================================
+
+[ ] MongoDB configured and reachable.
+[ ] Strong SESSION_SECRET configured locally and in production secrets.
+[ ] Backend starts and reports database connected.
+[ ] Frontend starts and can sign in.
+[ ] Provider credentials added only to the backend environment.
+[ ] Backend restarted after adding secrets.
+[ ] GitHub, Vercel and Render pages show connected status.
+[ ] Discovery pages list expected account resources.
+[ ] Internal projects created only for work you want tracked inside KenoraTechOS.
+[ ] No internal project links are needed for provider discovery.
+[ ] Provider resources and deployment events appear after sync.
+[ ] Any optional legacy links are correct for project-specific workflows.
+[ ] Deploy actions tested on the intended resource and verified in the provider dashboard.
+[ ] .env remains private and excluded from source control.
+
+End of guide.

@@ -1,0 +1,22 @@
+{
+  "name": "kenoratech-os",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,magenta \"npm run dev:server\" \"npm run dev:client\"",
+    "start": "node server/dist/server/src/server.js",
+    "dev:client": "npm run dev --workspace client",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "npm run build --workspace client",
+    "build:server": "npm run build --workspace server",
+    "typecheck": "npm run typecheck --workspace client && npm run typecheck --workspace server",
+    "test": "npm run test --workspace server",
+    "seed": "npm run seed:projects --workspace server",
+    "seed:projects": "npm run seed:projects --workspace server",
+    "seed:admin": "npm run seed:admin --workspace server"
+  },
+  "devDependencies": { "concurrently": "9.2.1" }
+}

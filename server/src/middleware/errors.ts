@@ -1,0 +1,3 @@
+import type { ErrorRequestHandler, RequestHandler } from 'express';
+export const notFound:RequestHandler=(_req,res)=>res.status(404).json({error:{message:'Resource not found'}});
+export const errorHandler:ErrorRequestHandler=(err,req,res,_next)=>{const status=err?.name==='ValidationError'||err?.name==='ZodError'?400:err?.code===11000?409:500;const message=status===500?'An unexpected server error occurred.':(err.message||'Invalid request');if(status===500)console.error({requestId:(req as any).requestId||null,errorName:err?.name||'Error',errorCode:err?.code||null});res.status(status).json({error:{message},requestId:(req as any).requestId||undefined})};
